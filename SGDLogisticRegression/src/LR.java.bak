@@ -1,0 +1,58 @@
+import java.io.*;
+import java.util.Enumeration;
+import java.util.HashSet;
+
+/**
+ * Main class for running normalized logistic regression with stochastic
+ * gradient descent. The code should be run using Makefile:
+ *   make build
+ *   make run
+ */
+public class LR {
+
+    public static void main(String[] args) throws IOException {
+        int dict_size = Integer.parseInt(args[0]);
+        float lambda = Float.parseFloat(args[1]);
+        float mu =  Float.parseFloat(args[2]);
+        int iters = Integer.parseInt(args[3]);
+        int train_size = Integer.parseInt(args[4]);
+        String test_file = args[5];
+
+        LRTrain trainer = new LRTrain(
+                dict_size,
+                lambda,
+                mu,
+                iters,
+                train_size
+        );
+        LRModel lrmodel = trainer.Train();
+
+        BufferedReader in = new BufferedReader(new FileReader(test_file));
+        BufferedWriter out = new BufferedWriter(new OutputStreamWriter(System.out));
+        String line;
+        HashSet<Integer> features = new HashSet<>();
+        while ((line = in.readLine()) != null) {
+            int tidx = line.indexOf("\t");
+            int idx = tidx + 1;
+            int sidx = line.indexOf(" ", idx);
+            while (sidx != -1) {
+                features.add(LRTrain.mod(
+                        line.substring(idx, sidx).hashCode(), dict_size));
+                idx = sidx + 1;
+                sidx = line.indexOf(" ", idx);
+            }
+            features.add(LRTrain.mod(line.substring(idx).hashCode(), dict_size));
+
+            Enumeration<String> e = lrmodel.models.keys();
+            while (e.hasMoreElements()) {
+                String cl = e.nextElement();
+                double p = lrmodel.classify(cl, features);
+                out.write(String.format("%s\t%f,", cl, p));
+            }
+            out.write("\n");
+        }
+
+        out.flush();
+    }
+
+}

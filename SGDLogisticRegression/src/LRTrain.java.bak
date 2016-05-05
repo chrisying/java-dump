@@ -1,0 +1,99 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashSet;
+
+/**
+ * Trainer for NLR+SGD
+ * Optimized with feature hashing + lazy regularization
+ * Returns an LRModel object
+ */
+public class LRTrain {
+
+    BufferedReader in;
+    int dict_size, iters, train_size;
+    float lambda, mu;
+    ArrayList<String> classes;
+    HashSet<Integer> features;
+
+    public LRTrain(int ds, float l, float m, int i, int ts) {
+        in = new BufferedReader(new InputStreamReader(System.in));
+        dict_size = ds;
+        lambda = l;
+        mu = m;
+        iters = i;
+        train_size = ts;
+        classes = new ArrayList<>();
+        features = new HashSet<>();
+    }
+
+    public LRModel Train() throws IOException {
+        LRModel lrmodel = new LRModel(dict_size, lambda, mu);
+
+        for (int iter = 0; iter < iters; iter++) {
+            lrmodel.lambda = lambda / Math.pow((iter + 1), 2);
+            for (int i = 0; i < train_size; i++) {
+                // Parse line
+                String line = in.readLine();
+                if (line == null) {
+                    continue;
+                }
+                int tidx = line.indexOf("\t");
+                classes.clear();
+                int idx = 0;
+                int cidx = line.indexOf(",");
+                while (cidx != -1 && cidx < tidx) {
+                    classes.add(line.substring(idx, cidx));
+                    idx = cidx + 1;
+                    cidx = line.indexOf(",", idx);
+                }
+                classes.add(line.substring(idx, tidx));
+
+                features.clear();
+                idx = tidx + 1;
+                cidx = line.indexOf(" ");
+                while (cidx != -1) {
+                    features.add(
+                            mod(line.substring(idx, cidx).hashCode(),
+                                    dict_size)
+                    );
+                    idx = cidx + 1;
+                    cidx = line.indexOf(" ", idx);
+                }
+                features.add(mod(
+                        line.substring(idx).hashCode(), dict_size));
+
+                // SGD iteration for each class
+                for (String cl : classes) {
+                    // TODO: prepopulate the model
+                    if (!lrmodel.models.containsKey(cl)) {
+                        lrmodel.init_model(cl);
+                    }
+                    for (int f : features) {
+                        lrmodel.regularize(cl, f, iter*i);
+                    }
+                    double p = lrmodel.classify(cl, features);
+                    for (int f : features) {
+                        lrmodel.update(cl, f, p);
+                    }
+                }
+            }
+        }
+        // Regularize all non-zero terms one last time
+        Enumeration<String> e = lrmodel.models.keys();
+        while (e.hasMoreElements()) {
+            String cl = e.nextElement();
+            for (int i = 0; i < dict_size; i++) {
+                lrmodel.regularize(cl, i, iters*train_size);
+            }
+        }
+
+        return lrmodel;
+    }
+
+    public static int mod(int a, int b) {
+        return (a % b + b) % b;
+    }
+}

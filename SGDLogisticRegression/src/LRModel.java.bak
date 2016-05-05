@@ -1,0 +1,87 @@
+import java.util.HashSet;
+import java.util.Hashtable;
+
+/**
+ * Object for storing LR trained model, includes multiple independent
+ * binary classifiers, one for each class
+ */
+public class LRModel {
+
+    static final int OVERFLOW = 20;
+
+    class Model {
+        public int k;
+        // Both arrays are indexed by feature hash code
+        public int[] A;        // Last regularization update
+        // TODO: try float
+        public double[] B;      // Weight vector
+
+        public Model(int dict_size) {
+            k = 0;
+            A = new int[dict_size];
+            B = new double[dict_size];
+        }
+    }
+
+    int dict_size;
+    double lambda, mu;
+    // class -> model
+    public Hashtable<String, Model> models;
+
+    public LRModel(int ds, double l, double m) {
+        dict_size = ds;
+        lambda = l;
+        mu = m;
+        models = new Hashtable<>();
+    }
+
+    public void init_model(String cl) {
+        if (models.containsKey(cl)) {
+            return;
+        }
+
+        Model model = new Model(dict_size);
+        models.put(cl, model);
+    }
+
+    public void regularize(String cl, int feature, int k) {
+        if (!models.containsKey(cl)) {
+            return;
+        }
+
+        Model model = models.get(cl);
+        model.B[feature] *= Math.pow(1-2*lambda*mu, k-model.A[feature]);
+        model.A[feature] = k;
+    }
+
+    // TODO: currently feature is 0/1, try word counts
+    public double classify(String cl, HashSet<Integer> v) {
+        if (!models.containsKey(cl)) {
+            return 0.5;     // equals 1/(1+exp(0))
+        }
+        Model model = models.get(cl);
+
+        double score = 0.0;
+        for (int i : v) {
+            score += model.B[i];
+        }
+
+        // Prevent overflow
+        if (score > OVERFLOW) {
+            score = OVERFLOW;
+        } else if (score < -OVERFLOW) {
+            score = -OVERFLOW;
+        }
+
+        return 1 / (1 + Math.exp(-score));
+    }
+
+    public void update(String cl, int f, double p) {
+        if (!models.containsKey(cl)) {
+            return;
+        }
+        Model model = models.get(cl);
+
+        model.B[f] += lambda * (1 - p) * 1;   // 0/1 feature
+    }
+}
